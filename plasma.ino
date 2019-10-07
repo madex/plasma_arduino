@@ -6,8 +6,11 @@
 // On a Trinket or Gemma we suggest changing this to 1
 #define PIN            5  // D1
 
+#define WIDTH  16
+#define HEIGHT 16
+
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      256
+#define NUMPIXELS      (WIDTH*HEIGHT)
 
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
@@ -21,12 +24,12 @@ typedef struct {
 } color_t;
 
 // calc a two dimentional position to onedimentrional position map array 
-uint8_t mapPix[16][16];
+uint8_t mapPix[HEIGHT][WIDTH];
 void initMap() {
   uint8_t i = 0;
-  for (uint8_t x = 0; x < 16; x++) {
-    for (uint8_t y = 0; y < 16; y++) {
-      uint8_t y2 = ((x % 2) == 0 ? y : 15-y);
+  for (uint8_t x = 0; x < WIDTH; x++) {
+    for (uint8_t y = 0; y < HEIGHT; y++) {
+      uint8_t y2 = ((x % 2) == 0 ? y : HEIGHT-1-y);
       mapPix[x][y2] = i++;
     }
   }
@@ -47,9 +50,18 @@ void setPixelH(int x, int y, int h) {
   pixels.setPixelColor(mapPix[x][y], pixels.Color(col.r, col.g, col.b));
 }
 
-#define WIDTH  16
-#define HEIGHT 16
 #define SQUARE(x) ((x)*(x))
+
+typedef struct {
+  uint16_t XYSumOffset;
+  uint16_t PolarOffset;
+  uint16_t cxOffset;
+  uint16_t cyOffset;
+} plasma_state_t;
+
+plasma_state_t plasma_state;
+void plasma(plasma_state_t *state);
+void showNextPlasmaframe(uint16_t ms); 
 
 void setup() {
   initMap();
@@ -57,7 +69,17 @@ void setup() {
 }
 
 void loop() {
-  plasma();
+  showNextPlasmaframe(40);
+}
+
+void showNextPlasmaframe(uint16_t ms) {
+  long start = millis();
+  plasma(&plasma_state);
+  long cur = millis();
+  while ((cur - start) < ms) {
+    delay(1);
+    cur = millis();
+  }
 }
 
 int isqrt(long n) {      /* Nur mit Bitshifts, Additionen und Subtraktionen */
@@ -111,8 +133,8 @@ color_t HtoRGB(int h31bit) {
   unsigned char sextant;
   int           q;
   sextant  = h31bit / 8192;   // 60°
-  h31bit     = h31bit % 8192;
-  q          = 8191 - h31bit; 
+  h31bit   = h31bit % 8192;
+  q        = 8191 - h31bit; 
   switch (sextant) {
       case 0:
         rgb.r = 255;
@@ -158,51 +180,25 @@ int plasma_XYSum(unsigned int x, unsigned int y, unsigned int offset, unsigned i
   return Sine((unsigned int)(x )*scale/65535 + offset) + Sine((unsigned int)(y )*scale/32767 + offset);
 }
 
-void plasma() {
-  int x, y;
-  int mx, my;
-  int cx, cy;
-  int color, scale, XYSumOffset, PolarOffset, colOff;
-  int cxOffset, cyOffset;
-  scale = 1;
-  PolarOffset = 0;
-  XYSumOffset = 0;
-  cxOffset = 0;
-  cyOffset = 0;
-  colOff = 0;
-
-  while (1) {
-    XYSumOffset += 80;
-    XYSumOffset %= 65536;
-    
-    cxOffset += 50;
-    cxOffset %= 65536;
-    
-    cyOffset += 59;
-    cyOffset %= 65536;
-
-    PolarOffset +=100;
-    PolarOffset %=65536;
-    
-    colOff %= 49152;
-    
-    cx = (Sine(cxOffset) * (WIDTH/2))/128;
-    cy = (Sine(cyOffset) * (HEIGHT/2))/128;
-      
-    for (y = 0; y < WIDTH; y++) {
-      for (x = 0; x < HEIGHT; x++) {
-        mx = x*256;
-        my = y*256;
-        //sum of hansi-tuned XYSum plasma and peter-tuned polar plasma
-        color = 0;
-        color += plasma_XYSum(mx, my, XYSumOffset, 32767);      
-        color += plasma_Polar(mx, my, PolarOffset, 10000, cx, cy);
-        color /= 2;
-        color += color/2;
-        setPixelH(x, y, color+colOff);
-      }
+void plasma(plasma_state_t *state) {
+  state->XYSumOffset += 80;    
+  state->cxOffset    += 50;
+  state->cyOffset    += 59;
+  state->PolarOffset +=100;
+  int cx = (Sine(state->cxOffset) * (WIDTH/2))/128;
+  int cy = (Sine(state->cyOffset) * (HEIGHT/2))/128;
+  for (uint8_t y = 0; y < HEIGHT; y++) {
+    for (uint8_t x = 0; x < WIDTH; x++) {
+      uint16_t mx = x*256;
+      uint16_t my = y*256;
+      //sum of hansi-tuned XYSum plasma and peter-tuned polar plasma
+      uint16_t color = 0;
+      color += plasma_XYSum(mx, my, state->XYSumOffset, 32767);
+      color += plasma_Polar(mx, my, state->PolarOffset, 10000, cx, cy);
+      color /= 2;
+      color += color/2;
+      setPixelH(x, y, color);
     }
-    pixels.show(); // This sends the updated pixel color to the hardware.
-    delay(30); // Delay for a period of time (in milliseconds).
   }
+  pixels.show(); // This sends the updated pixel color to the hardware.
 }
