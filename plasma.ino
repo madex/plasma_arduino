@@ -7,7 +7,7 @@
 #define PIN            5  // D1
 
 #define WIDTH  16
-#define HEIGHT 16
+#define HEIGHT 16 // the snake side
 
 // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS      (WIDTH*HEIGHT)
@@ -24,7 +24,7 @@ typedef struct {
 } color_t;
 
 // calc a two dimentional position to onedimentrional position map array 
-uint8_t mapPix[HEIGHT][WIDTH];
+uint8_t mapPix[WIDTH][HEIGHT];
 void initMap() {
   uint8_t i = 0;
   for (uint8_t x = 0; x < WIDTH; x++) {
